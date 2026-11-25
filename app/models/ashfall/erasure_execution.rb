@@ -30,8 +30,8 @@ module Ashfall
       model_class.transaction do
         user = model_class.find_by!(subject_ref: subject_ref)
         receipt = {
-          subject: OpenSSL::HMAC.hexdigest("SHA256", @secret, subject_ref),
-          actions: apply_plan(user),
+          subject: subject_token(subject_ref),
+          actions: apply_plan(user, subject_ref),
           completed_at: Time.now.utc.iso8601,
           schema_fingerprint: schema_fingerprint(model_class)
         }
@@ -42,19 +42,25 @@ module Ashfall
 
     private
 
-    def apply_plan(user)
+    def apply_plan(user, subject_ref)
       @registry.actions_for("User").map do |declaration|
         case declaration.action
         when :delete
           user.update!(declaration.column => nil)
           { column: declaration.column, action: :deleted }
         when :pseudonymize
-          user.update!(declaration.column => pseudonym(user, declaration.column))
+          value = declaration.column == "subject_ref" ? subject_token(subject_ref) : pseudonym(user, declaration.column)
+          user.update!(declaration.column => value)
           { column: declaration.column, action: :pseudonymized }
         when :retain
           { column: declaration.column, action: :retained }
         end
       end
+    end
+
+    def subject_token(subject_ref)
+      return subject_ref if subject_ref.start_with?("ashfall:")
+      "ashfall:#{OpenSSL::HMAC.hexdigest("SHA256", @secret, subject_ref)}"
     end
 
     def pseudonym(user, column)

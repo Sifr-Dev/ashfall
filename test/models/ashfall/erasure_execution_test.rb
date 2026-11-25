@@ -8,7 +8,7 @@ module Ashfall
         { model: "User", column: "name", category: :contact, action: :delete, retention: "30 days", justification: nil },
         { model: "User", column: "created_at", category: :metadata, action: :retain, retention: "7 years", justification: "Audit record" },
         { model: "User", column: "updated_at", category: :metadata, action: :retain, retention: "7 years", justification: "Audit record" },
-        { model: "User", column: "subject_ref", category: :identifier, action: :retain, retention: "7 years", justification: "Audit linkage" },
+        { model: "User", column: "subject_ref", category: :identifier, action: :pseudonymize, retention: "7 years", justification: "Pseudonymous audit linkage" },
         { model: "User", column: "id", category: :identifier, action: :retain, retention: "7 years", justification: "Primary key is required for a verifiable audit record" }
       ] + extra
     end
@@ -34,16 +34,19 @@ module Ashfall
       refute_equal "person@example.test", @user.email
       refute_equal "subject-1", receipt[:subject]
       assert_equal :deleted, receipt[:actions].find { |a| a[:column] == "name" }[:action]
-      assert_equal :retained, receipt[:actions].find { |a| a[:column] == "subject_ref" }[:action]
+      assert_equal :pseudonymized, receipt[:actions].find { |a| a[:column] == "subject_ref" }[:action]
+      assert_equal receipt[:subject], @user.subject_ref
+      refute_equal "subject-1", @user.subject_ref
       assert receipt[:schema_fingerprint].match?(/\A[0-9a-f]{64}\z/)
       assert receipt.frozen?
       assert receipt[:actions].all?(&:frozen?)
     end
 
-    test "pseudonymization is deterministic for the same subject and secret" do
+    test "pseudonymization is deterministic and allows a repeat lookup" do
       first = execution.call("subject-1")[:subject]
-      second = execution.call("subject-1")[:subject]
+      second = execution.call(first)[:subject]
       assert_equal first, second
+      assert_equal first, @user.reload.subject_ref
     end
 
     test "schema gaps fail before writing" do
