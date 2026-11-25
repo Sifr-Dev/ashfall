@@ -19,6 +19,8 @@ default: &default
   # configuration remains explicit and must not share the local instance.
   host: <%= ENV.fetch("ASHFALL_DB_HOST", File.expand_path("../.local", __dir__)) %>
   port: <%= ENV.fetch("ASHFALL_DB_PORT", 55432) %>
+  username: <%= ENV["ASHFALL_DB_USER"] %>
+  password: <%= ENV["ASHFALL_DB_PASSWORD"] %>
   # For details on connection pooling, see Rails configuration guide
   # https://guides.rubyonrails.org/configuring.html#database-pooling
   max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
