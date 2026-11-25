@@ -45,3 +45,7 @@ mise exec -- bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error
 ## Current scope
 
 `config/erasure.example.yml` demonstrates the declaration format. The registry validates it and produces an action plan, but it does **not yet** prove complete schema coverage, delete data, traverse associations, process background jobs, or issue a legal-compliance certificate. Those capabilities need their own tested milestones.
+
+`Ashfall::SchemaAudit` compares declared fields with actual model columns and reports unknown declarations and undeclared columns.
+
+`Ashfall::ErasureExecution` is a trusted service-level workflow, not an unauthenticated web endpoint. Given an explicit subject reference and a validated declaration set, it requires full target-model coverage, applies delete/pseudonymize/retain actions in one PostgreSQL transaction, and returns an immutable receipt with an HMAC-based subject identifier, action outcomes, UTC timestamp, and schema fingerprint. A later write failure rolls back earlier changes. There is no association discovery, ActiveStorage erasure, background processing, or compliance certification yet.
