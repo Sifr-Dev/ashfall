@@ -1,0 +1,16 @@
+# Example declaration. Every column that may contain personal data must be
+# explicitly classified. The registry is a planning contract, not proof that
+# an application's entire schema is covered.
+declarations:
+  - model: User
+    column: email
+    category: contact
+    action: pseudonymize
+    retention: 30 days
+    justification:
+  - model: Invoice
+    column: tax_id
+    category: identifier
+    action: retain
+    retention: 7 years
+    justification: Statutory accounting record

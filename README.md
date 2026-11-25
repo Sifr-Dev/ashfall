@@ -1,0 +1,47 @@
+# Ashfall
+
+Ashfall is a Rails application for planning verifiable data erasure and retention. It is a technical control for privacy workflows, **not legal advice or a compliance certification**.
+
+The first product component is `Ashfall::Registry`: a validated declaration of which model fields contain personal data, what should happen to them, and why anything is retained. Its output is an immutable plan keyed by a subject token. Delete, pseudonymize, and retain are explicit actions; retained data must have a justification. Unknown or malformed declarations fail closed.
+
+## Environment
+
+- Ruby **4.0.10**, installed and locked through the existing `mise` configuration (`mise.toml`, `mise.lock`).
+- Rails **8.1.4.1**, owned by Bundler (`Gemfile.lock`).
+- PostgreSQL **18.7** system binaries. Development and test databases use a project-local cluster on port **55432**, not the system service.
+
+The project does not require a second Ruby version manager, a global Rails gem, or a system PostgreSQL service.
+
+## Setup
+
+```sh
+mise install --locked
+mise exec -- bundle install
+mkdir -p .local
+initdb -D "$PWD/.local/pgdata" --encoding=UTF8 --locale=C.UTF-8 --auth=trust
+pg_ctl -D "$PWD/.local/pgdata" -o "-p 55432 -k $PWD/.local" -l "$PWD/.local/pg.log" start
+createdb -h "$PWD/.local" -p 55432 ashfall_development
+createdb -h "$PWD/.local" -p 55432 ashfall_test
+createdb -h "$PWD/.local" -p 55432 ashfall_queue
+mise exec -- bin/rails db:prepare
+```
+
+Stop the project-local server when finished:
+
+```sh
+pg_ctl -D "$PWD/.local/pgdata" stop
+```
+
+`config/master.key` and `.local/` are not committed. The project-local cluster uses trust authentication only on a private Unix socket. Use appropriate authentication and a separate database for any deployed environment.
+
+## Verify
+
+```sh
+mise exec -- bin/rails test
+mise exec -- bin/rubocop
+mise exec -- bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error
+```
+
+## Current scope
+
+`config/erasure.example.yml` demonstrates the declaration format. The registry validates it and produces an action plan, but it does **not yet** prove complete schema coverage, delete data, traverse associations, process background jobs, or issue a legal-compliance certificate. Those capabilities need their own tested milestones.
