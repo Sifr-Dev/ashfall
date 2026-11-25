@@ -12,6 +12,7 @@ module Ashfall
     def initialize(declarations)
       @declarations = declarations.map { |d| Category.new(**d) }
       validate!
+      @periods = @declarations.to_h { |d| [ [ d.model, d.column ], RetentionPeriod.parse(d.retention) ] }
     end
 
     def self.from_yaml(path)
@@ -28,7 +29,7 @@ module Ashfall
       @declarations.select { |d| d.model == model }
     end
 
-    def plan(subject:)
+    def plan(subject:, as_of: nil)
       @declarations.map do |declaration|
         {
           model: declaration.model,
@@ -37,6 +38,7 @@ module Ashfall
           action: declaration.action,
           subject: subject,
           retention: declaration.retention,
+          due_at: as_of && @periods.fetch([ declaration.model, declaration.column ]).due_at(as_of).utc.iso8601,
           justification: declaration.justification
         }.freeze
       end.freeze
