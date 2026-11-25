@@ -1,0 +1,10 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  email: MyString
+  subject_ref: fixture-one
+
+two:
+  email: MyString
+  name: MyString
+  subject_ref: fixture-two
