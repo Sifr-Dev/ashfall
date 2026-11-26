@@ -11,6 +11,11 @@ module Ashfall
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.1
 
+    # The erasure-evidence boundary depends on PostgreSQL check constraints and
+    # append-only triggers, which schema.rb cannot represent. Keep the dumped
+    # structure so a fresh database enforces the same guarantees as this one.
+    config.active_record.schema_format = :sql
+
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
