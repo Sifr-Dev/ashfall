@@ -22,6 +22,7 @@ module Ashfall
     end
 
     setup do
+      Note.delete_all
       User.delete_all
       @user = User.create!(email: "person@example.test", name: "Example Person", subject_ref: "subject-1")
     end
