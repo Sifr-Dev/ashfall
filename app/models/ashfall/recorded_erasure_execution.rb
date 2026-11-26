@@ -3,11 +3,10 @@
 module Ashfall
   # Runs an erasure plan and records its receipt in the same transaction.
   #
-  # The receipt write shares the erasure transaction, so if the evidence cannot
-  # be written the erasure is rolled back and data and evidence cannot drift
-  # apart. A plan that already has a receipt returns it without re-applying
-  # actions. Concurrent first-time callers both apply the same deterministic
-  # plan; the database keeps exactly one receipt for it.
+  # The receipt write shares the erasure transaction, so if evidence cannot be
+  # written the erasure itself is rolled back. A plan that already has a receipt
+  # returns it without re-applying actions. Concurrent first-time callers both
+  # apply the same deterministic plan; the database keeps exactly one receipt.
   class RecordedErasureExecution
     class Error < StandardError; end
 
@@ -18,7 +17,7 @@ module Ashfall
 
     # Returns the persisted Ashfall::ErasureReceipt. The caller can check
     # receipt.verified?(secret) and receipt.actions without trusting this call.
-    def call(subject_ref, model: "User")
+    def call(subject_ref, model: "User", idempotency_key: nil)
       raise ErasureExecution::SubjectNotFound, "Subject reference is required" if subject_ref.blank?
 
       subject_token = @execution.subject_token(subject_ref)
@@ -35,7 +34,8 @@ module Ashfall
           model: receipt[:model],
           schema_fingerprint: receipt[:schema_fingerprint],
           actions: receipt[:actions],
-          completed_at: receipt[:completed_at]
+          completed_at: receipt[:completed_at],
+          idempotency_key: idempotency_key
         )
       end
       recorded || raise(Error, "Erasure completed without recording a receipt")
