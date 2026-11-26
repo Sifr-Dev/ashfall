@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "openssl"
-require "digest"
 require "time"
 
 module Ashfall
@@ -18,26 +17,46 @@ module Ashfall
       @secret = secret
     end
 
-    def call(subject_ref, model_name: "User", audit_models: nil)
-      raise SubjectNotFound, "Subject reference is required" if subject_ref.blank?
+    # Fail closed before any write: the target model must be loaded and every
+    # column of the audited models must have a declaration.
+    def validate!(model_name: "User", audit_models: nil)
       model_class = @model_classes.find { |klass| klass.name == model_name }
       raise SchemaMismatch, "#{model_name} model is not loaded" unless model_class
       audit = SchemaAudit.new(@registry, audit_models || [ model_class ])
       findings = audit.findings.select { |finding| finding.model == model_name }
       raise SchemaMismatch, findings.map(&:message).join("; ") if findings.any?
 
+      model_class
+    end
+
+    # Applies the declared plan in one transaction and returns a frozen receipt.
+    def call(subject_ref, model_name: "User", audit_models: nil)
+      raise SubjectNotFound, "Subject reference is required" if subject_ref.blank?
+      model_class = validate!(model_name: model_name, audit_models: audit_models)
+      fingerprint = schema_fingerprint
+      completed_at = Time.now.utc
+
       receipt = nil
       model_class.transaction do
         user = model_class.find_by!(subject_ref: subject_ref)
         receipt = {
           subject: subject_token(subject_ref),
+          model_name: model_name,
           actions: apply_plan(user, subject_ref, model_name),
-          completed_at: Time.now.utc.iso8601,
-          schema_fingerprint: schema_fingerprint(model_class)
+          completed_at: completed_at,
+          schema_fingerprint: fingerprint
         }
       end
       receipt[:actions].each(&:freeze)
       receipt.freeze
+    end
+
+    def subject_token(subject_ref)
+      SubjectToken.derive(secret: @secret, subject_ref: subject_ref)
+    end
+
+    def schema_fingerprint
+      SchemaFingerprint.new(registry: @registry, model_classes: @model_classes).to_s
     end
 
     private
@@ -58,20 +77,8 @@ module Ashfall
       end
     end
 
-    def subject_token(subject_ref)
-      return subject_ref if subject_ref.start_with?("ashfall:")
-      "ashfall:#{OpenSSL::HMAC.hexdigest("SHA256", @secret, subject_ref)}"
-    end
-
     def pseudonym(user, column)
       "erased-#{OpenSSL::HMAC.hexdigest("SHA256", @secret, "user:#{user.id}:#{column}")}"
-    end
-
-    def schema_fingerprint(model_class)
-      declarations = @model_classes.flat_map do |klass|
-        @registry.actions_for(klass.name).map { |d| [ d.model, d.column, d.action, d.retention ] }
-      end
-      Digest::SHA256.hexdigest([ @model_classes.map { |klass| [ klass.name, klass.column_names.sort ] }, declarations ].to_json)
     end
   end
 end
