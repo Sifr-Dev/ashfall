@@ -19,20 +19,20 @@ module Ashfall
 
     # Fail closed before any write: the target model must be loaded and every
     # column of the audited models must have a declaration.
-    def validate!(model_name: "User", audit_models: nil)
-      model_class = @model_classes.find { |klass| klass.name == model_name }
-      raise SchemaMismatch, "#{model_name} model is not loaded" unless model_class
+    def validate!(model: "User", audit_models: nil)
+      model_class = @model_classes.find { |klass| klass.name == model }
+      raise SchemaMismatch, "#{model} model is not loaded" unless model_class
       audit = SchemaAudit.new(@registry, audit_models || [ model_class ])
-      findings = audit.findings.select { |finding| finding.model == model_name }
+      findings = audit.findings.select { |finding| finding.model == model }
       raise SchemaMismatch, findings.map(&:message).join("; ") if findings.any?
 
       model_class
     end
 
     # Applies the declared plan in one transaction and returns a frozen receipt.
-    def call(subject_ref, model_name: "User", audit_models: nil)
+    def call(subject_ref, model: "User", audit_models: nil)
       raise SubjectNotFound, "Subject reference is required" if subject_ref.blank?
-      model_class = validate!(model_name: model_name, audit_models: audit_models)
+      model_class = validate!(model: model, audit_models: audit_models)
       fingerprint = schema_fingerprint
       completed_at = Time.now.utc
 
@@ -41,8 +41,8 @@ module Ashfall
         user = model_class.find_by!(subject_ref: subject_ref)
         receipt = {
           subject: subject_token(subject_ref),
-          model_name: model_name,
-          actions: apply_plan(user, subject_ref, model_name),
+          model: model,
+          actions: apply_plan(user, subject_ref, model),
           completed_at: completed_at,
           schema_fingerprint: fingerprint
         }
@@ -61,8 +61,8 @@ module Ashfall
 
     private
 
-    def apply_plan(user, subject_ref, model_name = "User")
-      @registry.actions_for(model_name).map do |declaration|
+    def apply_plan(user, subject_ref, model = "User")
+      @registry.actions_for(model).map do |declaration|
         case declaration.action
         when :delete
           user.update!(declaration.column => nil)

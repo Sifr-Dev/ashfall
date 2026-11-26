@@ -16,7 +16,7 @@ module Ashfall
     DEFAULT_LIMIT = 100
     MAX_LIMIT = 1_000
 
-    Entry = Data.define(:subject_token, :model_name, :schema_fingerprint, :completed_at, :due_at, :retention)
+    Entry = Data.define(:subject_token, :model, :schema_fingerprint, :completed_at, :due_at, :retention)
 
     def initialize(registry:, now: Time.now.utc)
       @registry = registry
@@ -39,14 +39,14 @@ module Ashfall
 
         entries << Entry.new(
           subject_token: receipt.subject_token,
-          model_name: receipt.model_name,
+          model: receipt.model,
           schema_fingerprint: receipt.schema_fingerprint,
           completed_at: receipt.completed_at,
           due_at: due_at,
           retention: retention.text
         )
       end
-      entries.sort_by { |entry| [ entry.due_at, entry.subject_token, entry.model_name ] }.first(bounded(limit))
+      entries.sort_by { |entry| [ entry.due_at, entry.subject_token, entry.model ] }.first(bounded(limit))
     end
 
     def due?(receipt)
@@ -62,7 +62,7 @@ module Ashfall
     end
 
     def retention_for(receipt)
-      declarations = @registry.actions_for(receipt.model_name)
+      declarations = @registry.actions_for(receipt.model)
       return nil if declarations.empty?
 
       # The receipt is evidence for the whole plan. The plan becomes due when

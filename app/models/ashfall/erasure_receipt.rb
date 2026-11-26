@@ -27,7 +27,7 @@ module Ashfall
     scope :recent_first, -> { order(completed_at: :desc, id: :desc) }
 
     validates :subject_token, presence: true, format: { with: SubjectToken::FORMAT }
-    validates :model_name, presence: true, format: { with: MODEL_NAME }
+    validates :model, presence: true, format: { with: MODEL_NAME }
     validates :schema_fingerprint, presence: true, format: { with: HEX64 }
     validates :idempotency_key, presence: true, format: { with: IDEMPOTENCY_KEY }
     validates :fingerprint, presence: true, format: { with: HEX64 }
@@ -36,7 +36,10 @@ module Ashfall
     validate :actions_are_an_array
 
     class << self
-      def canonical_payload(subject_token:, model_name:, schema_fingerprint:, actions:, completed_at:)
+      # PostgreSQL stores timestamps at microsecond precision. Truncating here
+      # (rather than relying on the adapter) keeps the canonical payload and the
+      # stored value identical, so a round-trip receipt still verifies.
+      def canonical_payload(subject_token:, model:, schema_fingerprint:, actions:, completed_at:)
         normalized_actions = Array(actions).map do |action|
           {
             "column" => (action[:column] || action["column"]).to_s,
@@ -48,10 +51,10 @@ module Ashfall
         {
           "domain" => DOMAIN,
           "subject_token" => subject_token.to_s,
-          "model_name" => model_name.to_s,
+          "model" => model.to_s,
           "schema_fingerprint" => schema_fingerprint.to_s,
           "actions" => normalized_actions,
-          "completed_at" => completed_at.utc.iso8601(6)
+          "completed_at" => completed_at.utc.floor(6).iso8601(6)
         }
       end
 
@@ -66,8 +69,8 @@ module Ashfall
       # Default idempotency key for a plan: stable for the same subject token,
       # model, and schema fingerprint, so a retried request is recognized even
       # if no explicit request key was supplied.
-      def plan_idempotency_key(subject_token:, model_name:, schema_fingerprint:)
-        Digest::SHA256.hexdigest(JSON.generate([ DOMAIN, "plan", subject_token.to_s, model_name.to_s, schema_fingerprint.to_s ]))
+      def plan_idempotency_key(subject_token:, model:, schema_fingerprint:)
+        Digest::SHA256.hexdigest(JSON.generate([ DOMAIN, "plan", subject_token.to_s, model.to_s, schema_fingerprint.to_s ]))
       end
     end
 
@@ -79,7 +82,7 @@ module Ashfall
     def canonical_payload
       self.class.canonical_payload(
         subject_token: subject_token,
-        model_name: model_name,
+        model: model,
         schema_fingerprint: schema_fingerprint,
         actions: actions,
         completed_at: completed_at

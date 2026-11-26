@@ -18,21 +18,21 @@ module Ashfall
 
     # Returns the persisted Ashfall::ErasureReceipt. The caller can check
     # receipt.verified?(secret) and receipt.actions without trusting this call.
-    def call(subject_ref, model_name: "User")
+    def call(subject_ref, model: "User")
       raise ErasureExecution::SubjectNotFound, "Subject reference is required" if subject_ref.blank?
 
       subject_token = @execution.subject_token(subject_ref)
       schema_fingerprint = @execution.schema_fingerprint
 
-      existing = @store.find(subject_token: subject_token, model_name: model_name, schema_fingerprint: schema_fingerprint)
+      existing = @store.find(subject_token: subject_token, model: model, schema_fingerprint: schema_fingerprint)
       return existing if existing
 
       recorded = nil
       ActiveRecord::Base.transaction do
-        receipt = @execution.call(subject_ref, model_name: model_name)
+        receipt = @execution.call(subject_ref, model: model)
         recorded = @store.record(
           subject_token: receipt[:subject],
-          model_name: receipt[:model_name],
+          model: receipt[:model],
           schema_fingerprint: receipt[:schema_fingerprint],
           actions: receipt[:actions],
           completed_at: receipt[:completed_at]

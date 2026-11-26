@@ -64,7 +64,7 @@ CREATE TABLE public.ar_internal_metadata (
 CREATE TABLE public.erasure_receipts (
     id bigint NOT NULL,
     subject_token character varying NOT NULL,
-    model_name character varying NOT NULL,
+    model character varying CONSTRAINT erasure_receipts_model_name_not_null NOT NULL,
     schema_fingerprint character varying NOT NULL,
     idempotency_key character varying NOT NULL,
     actions jsonb DEFAULT '[]'::jsonb NOT NULL,
@@ -76,10 +76,10 @@ CREATE TABLE public.erasure_receipts (
     CONSTRAINT erasure_receipts_actions_array CHECK ((jsonb_typeof(actions) = 'array'::text)),
     CONSTRAINT erasure_receipts_fingerprint_format CHECK (((fingerprint)::text ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT erasure_receipts_idempotency_key_format CHECK (((idempotency_key)::text ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$'::text)),
-    CONSTRAINT erasure_receipts_model_name_format CHECK (((model_name)::text ~ '^[A-Z][A-Za-z0-9_:]*$'::text)),
     CONSTRAINT erasure_receipts_schema_fingerprint_format CHECK (((schema_fingerprint)::text ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT erasure_receipts_signature_format CHECK (((signature)::text ~ '^[0-9a-f]{64}$'::text)),
-    CONSTRAINT erasure_receipts_subject_token_format CHECK (((subject_token)::text ~ '^ashfall:[0-9a-f]{64}$'::text))
+    CONSTRAINT erasure_receipts_subject_token_format CHECK (((subject_token)::text ~ '^ashfall:[0-9a-f]{64}$'::text)),
+    CONSTRAINT erasure_receipts_model_format CHECK (((model)::text ~ '^[A-Z][A-Za-z0-9_:]*$'::text))
 );
 
 
@@ -246,10 +246,10 @@ CREATE UNIQUE INDEX index_erasure_receipts_on_idempotency_key ON public.erasure_
 
 
 --
--- Name: index_erasure_receipts_on_subject_token; Type: INDEX; Schema: public; Owner: -
+-- Name: index_erasure_receipts_on_plan_key; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX index_erasure_receipts_on_subject_token ON public.erasure_receipts USING btree (subject_token);
+CREATE UNIQUE INDEX index_erasure_receipts_on_plan_key ON public.erasure_receipts USING btree (subject_token, model, schema_fingerprint);
 
 
 --
@@ -295,6 +295,7 @@ ALTER TABLE ONLY public.notes
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261126050500'),
 ('20261126043500'),
 ('20261126001726'),
 ('20261125124840'),
