@@ -36,15 +36,18 @@ module Ashfall
     # `idempotency_key` defaults to a digest of the plan itself. Callers that
     # retry a request may pass their own stable request key instead; the plan
     # key still prevents a second receipt for the same plan.
-    def record(subject_token:, model_name:, schema_fingerprint:, actions:, completed_at:, idempotency_key: nil)
+    def record(subject_token:, model:, schema_fingerprint:, actions:, completed_at:, idempotency_key: nil)
       idempotency_key ||= ErasureReceipt.plan_idempotency_key(
         subject_token: subject_token,
-        model_name: model_name,
+        model: model,
         schema_fingerprint: schema_fingerprint
       )
+      # Truncate before both hashing and storing so the canonical payload and
+      # the PostgreSQL microsecond value never diverge.
+      completed_at = completed_at.utc.floor(6)
       payload = ErasureReceipt.canonical_payload(
         subject_token: subject_token,
-        model_name: model_name,
+        model: model,
         schema_fingerprint: schema_fingerprint,
         actions: actions,
         completed_at: completed_at
@@ -53,7 +56,7 @@ module Ashfall
 
       attributes = {
         subject_token: payload["subject_token"],
-        model_name: payload["model_name"],
+        model: payload["model"],
         schema_fingerprint: payload["schema_fingerprint"],
         idempotency_key: idempotency_key,
         actions: payload["actions"],
@@ -69,10 +72,10 @@ module Ashfall
       receipt
     end
 
-    def find(subject_token:, model_name:, schema_fingerprint:)
+    def find(subject_token:, model:, schema_fingerprint:)
       ErasureReceipt.find_by(
         subject_token: subject_token,
-        model_name: model_name,
+        model: model,
         schema_fingerprint: schema_fingerprint
       )
     end
@@ -93,7 +96,7 @@ module Ashfall
 
       ErasureReceipt.find_by!(
         subject_token: attributes[:subject_token],
-        model_name: attributes[:model_name],
+        model: attributes[:model],
         schema_fingerprint: attributes[:schema_fingerprint]
       )
     rescue ActiveRecord::RecordNotUnique
@@ -105,7 +108,7 @@ module Ashfall
     def ensure_same_evidence!(receipt, payload)
       same = receipt.actions == payload["actions"] &&
         receipt.subject_token == payload["subject_token"] &&
-        receipt.model_name == payload["model_name"] &&
+        receipt.model == payload["model"] &&
         receipt.schema_fingerprint == payload["schema_fingerprint"]
       raise PlanConflict, "Existing receipt disagrees with the retried erasure plan" unless same
     end
@@ -114,7 +117,7 @@ module Ashfall
       unless SubjectToken.valid?(payload["subject_token"])
         raise InvalidReceipt, "Subject token must be an ashfall HMAC token"
       end
-      unless payload["model_name"].match?(ErasureReceipt::MODEL_NAME)
+      unless payload["model"].match?(ErasureReceipt::MODEL_NAME)
         raise InvalidReceipt, "Model name is not a loaded model name"
       end
       unless payload["schema_fingerprint"].match?(ErasureReceipt::HEX64)

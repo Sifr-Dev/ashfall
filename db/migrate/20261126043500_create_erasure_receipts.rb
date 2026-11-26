@@ -19,7 +19,7 @@ class CreateErasureReceipts < ActiveRecord::Migration[8.1]
   def up
     create_table :erasure_receipts do |t|
       t.string :subject_token, null: false
-      t.string :model_name, null: false
+      t.string :model, null: false
       t.string :schema_fingerprint, null: false
       t.string :idempotency_key, null: false
       t.jsonb :actions, null: false, default: []
@@ -30,18 +30,15 @@ class CreateErasureReceipts < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :erasure_receipts,
-      [ :subject_token, :model_name, :schema_fingerprint ],
-      unique: true,
-      name: "index_erasure_receipts_on_plan_key"
+    add_index :erasure_receipts, [ :subject_token, :model, :schema_fingerprint ], unique: true, name: "index_erasure_receipts_on_plan_key"
     add_index :erasure_receipts, :idempotency_key, unique: true
 
     add_check_constraint :erasure_receipts,
       "subject_token ~ '^ashfall:[0-9a-f]{64}$'",
       name: "erasure_receipts_subject_token_format"
     add_check_constraint :erasure_receipts,
-      "model_name ~ '^[A-Z][A-Za-z0-9_:]*$'",
-      name: "erasure_receipts_model_name_format"
+      "model ~ '^[A-Z][A-Za-z0-9_:]*$'",
+      name: "erasure_receipts_model_format"
     add_check_constraint :erasure_receipts,
       "schema_fingerprint ~ '^[0-9a-f]{64}$'",
       name: "erasure_receipts_schema_fingerprint_format"
