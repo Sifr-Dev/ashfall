@@ -18,12 +18,12 @@ module Ashfall
       @secret = secret
     end
 
-    def call(subject_ref)
+    def call(subject_ref, model_name: "User", audit_models: nil)
       raise SubjectNotFound, "Subject reference is required" if subject_ref.blank?
-      model_class = @model_classes.find { |klass| klass.name == "User" }
-      raise SchemaMismatch, "User model is not loaded" unless model_class
-      audit = SchemaAudit.new(@registry, [ model_class ])
-      findings = audit.findings
+      model_class = @model_classes.find { |klass| klass.name == model_name }
+      raise SchemaMismatch, "#{model_name} model is not loaded" unless model_class
+      audit = SchemaAudit.new(@registry, audit_models || [ model_class ])
+      findings = audit.findings.select { |finding| finding.model == model_name }
       raise SchemaMismatch, findings.map(&:message).join("; ") if findings.any?
 
       receipt = nil
@@ -31,7 +31,7 @@ module Ashfall
         user = model_class.find_by!(subject_ref: subject_ref)
         receipt = {
           subject: subject_token(subject_ref),
-          actions: apply_plan(user, subject_ref),
+          actions: apply_plan(user, subject_ref, model_name),
           completed_at: Time.now.utc.iso8601,
           schema_fingerprint: schema_fingerprint(model_class)
         }
@@ -42,8 +42,8 @@ module Ashfall
 
     private
 
-    def apply_plan(user, subject_ref)
-      @registry.actions_for("User").map do |declaration|
+    def apply_plan(user, subject_ref, model_name = "User")
+      @registry.actions_for(model_name).map do |declaration|
         case declaration.action
         when :delete
           user.update!(declaration.column => nil)
@@ -68,8 +68,10 @@ module Ashfall
     end
 
     def schema_fingerprint(model_class)
-      declarations = @registry.actions_for("User").map { |d| [ d.model, d.column, d.action, d.retention ] }
-      Digest::SHA256.hexdigest([ model_class.column_names.sort, declarations ].to_json)
+      declarations = @model_classes.flat_map do |klass|
+        @registry.actions_for(klass.name).map { |d| [ d.model, d.column, d.action, d.retention ] }
+      end
+      Digest::SHA256.hexdigest([ @model_classes.map { |klass| [ klass.name, klass.column_names.sort ] }, declarations ].to_json)
     end
   end
 end
